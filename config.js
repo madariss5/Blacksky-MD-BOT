@@ -19,7 +19,7 @@ for (let i = 0; i < ownerlist.length; i++) {
     global.owner.push([ownerlist[i], true]);
 }
 //
-global.botname = process.env.BOTNAME || 'TOHID-AI';
+global.botname = process.env.BOTNAME || '𝔹𝕃𝔸ℂ𝕂𝕊𝕂𝕐-𝕄𝔻';
 global.pairingNumber = process.env.BOT_NUMBER || '4915562378343;  // put your number here
 global.SESSION_ID = process.env.SESSION_ID || '3MJCABxK#NZmnFZaKMq2PsKlRyqWIgYO6l5HGNKaLXiLphs-aiyI' ;  // put your session id here
 
