@@ -1,189 +1,97 @@
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import fs from 'fs';
-import path from 'path';
-import fetch from 'node-fetch';
-import pkg from 'api-qasim'; // Import ytmp4 from api-qasim package
-import yts from 'youtube-yts';
-import ffmpeg from 'fluent-ffmpeg'; // Import fluent-ffmpeg for video to audio conversion
-import { promisify } from 'util';
-import { pipeline } from 'stream';
-import mime from 'mime-types';  // Import mime-types to dynamically determine MIME type
+import axios from "axios";
+import ytSearch from "yt-search";
 
-const { ytmp4 } = pkg;
-const streamPipeline = promisify(pipeline);
+let handler = async (m, { conn, text, botname }) => {
+  if (!text) return m.reply("❌ What song do you want to download?");
 
-// Create __dirname for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+  await m.reply("🔄 *Tohid-Ai Bot Fetching your audio... Please wait...*");
 
-// Custom temporary directory
-const customTmpDir = path.join(__dirname, 'custom_tmp');
+  try {
+    let search = await ytSearch(text);
+    let video = search.videos[0];
 
-// Ensure the custom_tmp directory exists
-if (!fs.existsSync(customTmpDir)) {
-  fs.mkdirSync(customTmpDir);
-}
+    if (!video) return m.reply("❌ No results found. Please refine your search.");
 
-const handler = async (m, { conn, command, text, args, usedPrefix }) => {
-  if (!text) throw `Give a text to search Example: *${usedPrefix + command}* sefali odia song`;
-  conn.ultra = conn.ultra ? conn.ultra : {};
-  await m.react('🎶');
-  const result = await searchAndDownloadMusic(text);
-  const infoText = `✦ ──『 *TOHID-AI PLAYER* 』── ⚝ \n\n [ ⭐ Reply the number of the desired search result to get the Audio]. \n\n`;
+    let link = video.url;
+    let apis = [
+      `https://apis.davidcyriltech.my.id/youtube/mp3?url=${link}`,
+      `https://api.ryzendesu.vip/api/downloader/ytmp3?url=${link}`
+    ];
 
-  const orderedLinks = result.allLinks.map((link, index) => {
-    const sectionNumber = index + 1;
-    const { title, url } = link;
-    return `*${sectionNumber}.* ${title}`;
-  });
+    for (const api of apis) {
+      try {
+        let { data } = await axios.get(api);
 
-  const orderedLinksText = orderedLinks.join('\n\n');
-  const fullText = `${infoText}\n\n${orderedLinksText}`;
-  const { key } = await conn.reply(m.chat, fullText, m);
-  conn.ultra[m.sender] = {
-    result,
-    key,
-    timeout: setTimeout(() => {
-      conn.sendMessage(m.chat, {
-        delete: key,
-      });
-      delete conn.ultra[m.sender];
-    }, 150 * 1000),
-  };
-};
+        if (data.status === 200 || data.success) {
+          let audioUrl = data.result?.downloadUrl || data.url;
+          let songData = {
+            title: data.result?.title || video.title,
+            artist: data.result?.author || video.author.name,
+            thumbnail: data.result?.image || video.thumbnail,
+            videoUrl: link
+          };
 
-handler.before = async (m, { conn }) => {
-  conn.ultra = conn.ultra ? conn.ultra : {};
-  if (m.isBaileys || !(m.sender in conn.ultra)) return;
-  const { result, key, timeout } = conn.ultra[m.sender];
+          // Send metadata & thumbnail
+          await conn.sendMessage(
+            m.chat,
+            {
+              image: { url: songData.thumbnail },
+              caption: `THE TOHID-AI BOT
+╭═════════════════⊷
+║ 🎶 *Title:* ${songData.title}
+║ 🎤 *Artist:* ${songData.artist}
+║ 🔗 THANK YOU SORRY NO URL TO BE SHARED
+╰═════════════════⊷
+*𝙿𝙾𝚆𝙴𝚁𝙴𝙳 𝙱𝚈 © 𝚃𝙾𝙷𝙸𝙳-𝙰𝙸*`
+            },
+            { quoted: m }
+          );
 
-  if (!m.quoted || m.quoted.id !== key.id || !m.text) return;
-  const choice = m.text.trim();
-  const inputNumber = Number(choice);
-  if (inputNumber >= 1 && inputNumber <= result.allLinks.length) {
-    const selectedUrl = result.allLinks[inputNumber - 1].url;
+          await m.reply("📤 *Sending your audio...*");
 
-    try {
-      // Fetch video details using ytmp4
-      const response = await ytmp4(selectedUrl);
+          // Send as an audio file
+          await conn.sendMessage(
+            m.chat,
+            {
+              audio: { url: audioUrl },
+              mimetype: "audio/mp4",
+            },
+            { quoted: m }
+          );
 
-      // Validate response and ensure we have a video URL
-      if (!response || !response.video) {
-        throw new Error('No video URL found.');
+          await m.reply("📤 *Sending your MP3 file...*");
+
+          // Send as a document file
+          await conn.sendMessage(
+            m.chat,
+            {
+              document: { url: audioUrl },
+              mimetype: "audio/mp3",
+              fileName: `${songData.title.replace(/[^a-zA-Z0-9 ]/g, "")}.mp3`,
+            },
+            { quoted: m }
+          );
+
+          // Send success message
+          await m.reply("✅ *Tohid-Ai– World-class bot just successfully sent you what you requested! 🎶*");
+
+          return; // Stop execution if successful
+        }
+      } catch (e) {
+        console.error(`API Error (${api}):`, e.message);
+        continue; // Try next API if one fails
       }
-
-      const videoUrl = response.video;
-
-      // Fetch the video file buffer
-      const mediaResponse = await fetchWithRetry(videoUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-        },
-      });
-
-      const contentType = mediaResponse.headers.get('content-type');
-      if (!contentType || !contentType.includes('video')) {
-        throw new Error('Invalid content type received');
-      }
-
-      const arrayBuffer = await mediaResponse.arrayBuffer();
-      const mediaBuffer = Buffer.from(arrayBuffer);
-      if (mediaBuffer.length === 0) throw new Error('Downloaded file is empty');
-
-      // Create a temporary file for the video in the custom directory
-      const videoPath = path.join(customTmpDir, 'video.mp4');
-      fs.writeFileSync(videoPath, mediaBuffer);
-
-      // Convert the video to audio (MP3 format) using ffmpeg
-      const audioPath = path.join(customTmpDir, 'audio.mp3');
-
-      // Convert video to audio and send only the audio
-      ffmpeg(videoPath)
-        .audioCodec('libmp3lame')
-        .audioBitrate(128)
-        .toFormat('mp3')
-        .on('start', () => {})
-        .on('progress', () => {})
-        .on('stderr', () => {})
-        .on('end', async () => {
-          // Ensure audio file exists and is not empty
-          if (fs.existsSync(audioPath) && fs.statSync(audioPath).size > 0) {
-            const caption = `*Title:* ${response.title || 'No Title'}\n` +
-                            `*Author:* ${response.author || 'Unknown'}\n` +
-                            `*Duration:* ${response.duration || 'Unknown'}\n` +
-                            `*Views:* ${response.views || '0'}\n` +
-                            `*Uploaded on:* ${response.upload || 'Unknown Date'}`;
-
-            // Send the converted audio only, no video
-            const mimeType = mime.lookup(audioPath) || 'audio/mpeg';
-            await conn.sendFile(m.chat, audioPath, 'audio.mp3', caption, m, false, {
-              mimetype: mimeType,
-              ptt: false,
-            });
-          } else {
-            console.error('Audio file is empty or not found!');
-            m.reply('Failed to convert video to audio. Please try again later.');
-          }
-
-          // Clean up the temporary video and audio files immediately
-          fs.unlinkSync(videoPath); // Delete the video file after conversion
-          fs.unlinkSync(audioPath); // Delete the audio file after sending
-        })
-        .on('error', (err) => {
-          m.reply('An error occurred while converting the video to audio. Please try again later.');
-        })
-        .save(audioPath); // Save audio file
-    } catch (error) {
-      console.error('Error fetching video:', error.message);
-      await m.reply('An error occurred while fetching the video. Please try again later.');
-      await m.react('❌');
     }
-  } else {
-    m.reply(
-      'Invalid sequence number. Please select the appropriate number from the list above.\nBetween 1 to ' +
-        result.allLinks.length
-    );
+
+    // If all APIs fail
+    return m.reply("⚠️ An error occurred. All APIs might be down or unable to process the request.");
+  } catch (error) {
+    return m.reply("❌ Download failed\n" + error.message);
   }
 };
 
-handler.help = ['play'];
-handler.tags = ['downloader'];
-handler.command = ['play', 'song', 'spotify', 'playsong', 'ytplay'];
+handler.help = ["play"];
+handler.tags = ["downloader"];
+handler.command = /^play$/i;
 
 export default handler;
-
-async function searchAndDownloadMusic(query) {
-  try {
-    const { videos } = await yts(query);
-    if (!videos.length) return 'Sorry, no video results were found for this search.';
-
-    const allLinks = videos.map(video => ({
-      title: video.title,
-      url: video.url,
-    }));
-
-    const jsonData = {
-      title: videos[0].title,
-      description: videos[0].description,
-      duration: videos[0].duration,
-      author: videos[0].author.name,
-      allLinks: allLinks,
-      videoUrl: videos[0].url,
-      thumbnail: videos[0].thumbnail,
-    };
-
-    return jsonData;
-  } catch (error) {
-    return 'Error: ' + error.message;
-  }
-}
-
-async function fetchWithRetry(url, options, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    const response = await fetch(url, options);
-    if (response.ok) return response;
-  }
-  throw new Error('Failed to fetch media content after retries');
-                    }
