@@ -21,11 +21,11 @@ for (let i = 0; i < ownerlist.length; i++) {
 //
 global.botname = process.env.BOTNAME || '𝔹𝕃𝔸ℂ𝕂𝕊𝕂𝕐-𝕄𝔻';
 global.pairingNumber = process.env.BOT_NUMBER || '4915562378343;  // put your number here
-global.SESSION_ID = process.env.SESSION_ID || '3MJCABxK#NZmnFZaKMq2PsKlRyqWIgYO6l5HGNKaLXiLphs-aiyI' ;  // put your session id here
+global.SESSION_ID = process.env.SESSION_ID || 'KYRWGQwT#MS66o5l31MrxSTz9W0ppyNcZciQMc3l-5v8btjrprzI' ;  // put your session id here
 
 global.mods = []
 global.prems = []
-global.allowed = ['917849917350', '918930358452', '4915563151347']
+global.allowed = ['917849917350', '4915562378343', '4915563151347']
 global.keysZens = ['c2459db922', '37CC845916', '6fb0eff124']
 global.keysxxx = keysZens[Math.floor(keysZens.length * Math.random())]
 global.keysxteammm = [
@@ -73,8 +73,8 @@ global.APIKeys = {
 
 // Sticker WM
 global.premium = 'true'
-global.packname = 'TOHID-AI'
-global.author = 'Tohidkhan6332'
+global.packname = '𝔹𝕃𝔸ℂ𝕂𝕊𝕂𝕐-𝕄𝔻'
+global.author = 'madariss5'
 global.menuvid = 'https://i.imgur.com/2Sp3cqD.mp4'
 global.igfg = ' Follow on Instagram\nhttps://www.instagram.com/Tohidkhan6332'
 global.dygp = 'https://whatsapp.com/channel/0029VaGyP933bbVC7G0x0i2T'
